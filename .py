@@ -1,8 +1,7 @@
 # ==============================
-# STOCK MARKET PREDICTION SYSTEM
+# STOCK MARKET PREDICTION + BACKTESTING
 # ==============================
 
-# Install required packages (run once)
 # pip install yfinance pandas numpy matplotlib scikit-learn ta
 
 import yfinance as yf
@@ -22,7 +21,17 @@ from sklearn.metrics import accuracy_score, classification_report
 # 1. Download Historical Data
 # ------------------------------
 stock_symbol = "AAPL"
-data = yf.download(stock_symbol, start="2018-01-01", end="2024-01-01")
+
+data = yf.download(
+    stock_symbol,
+    start="2018-01-01",
+    end="2024-01-01",
+    auto_adjust=False
+)
+
+# FIX for Google Colab (MultiIndex columns)
+if isinstance(data.columns, pd.MultiIndex):
+    data.columns = data.columns.get_level_values(0)
 
 # ------------------------------
 # 2. Feature Engineering
@@ -38,14 +47,14 @@ data['MACD_signal'] = macd.macd_signal()
 data.dropna(inplace=True)
 
 # ------------------------------
-# 3. Target Variable (Buy/Sell)
+# 3. Target Variable
 # ------------------------------
 data['Tomorrow'] = data['Close'].shift(-1)
 data['Target'] = (data['Tomorrow'] > data['Close']).astype(int)
 data.dropna(inplace=True)
 
 # ------------------------------
-# 4. Feature Selection
+# 4. Features & Labels
 # ------------------------------
 features = [
     'Close',
@@ -78,51 +87,30 @@ model = RandomForestClassifier(
 model.fit(X_train, y_train)
 
 # ------------------------------
-# 7. Model Evaluation
+# 7. Evaluation
 # ------------------------------
 predictions = model.predict(X_test)
 
-print("Model Accuracy:", accuracy_score(y_test, predictions))
-print("\nClassification Report:\n", classification_report(y_test, predictions))
+print("Accuracy:", accuracy_score(y_test, predictions))
+print(classification_report(y_test, predictions))
 
 # ------------------------------
-# 8. Latest Buy / Sell Signal
+# 8. Latest Signal
 # ------------------------------
-latest_data = X.iloc[-1:].values
+latest_data = X.iloc[-1:]
 signal = model.predict(latest_data)
 
-if signal[0] == 1:
-    print("\n📈 BUY Signal")
-else:
-    print("\n📉 SELL Signal")
+print("\n📈 BUY Signal" if signal[0] == 1 else "\n📉 SELL Signal")
 
 # ------------------------------
-# 9. Visualization
+# 9. Prediction for Backtesting
 # ------------------------------
 data['Prediction'] = model.predict(X)
 
-plt.figure(figsize=(14, 6))
-plt.plot(data['Close'], label='Close Price', alpha=0.7)
+# ------------------------------
+# 10. Backtesting
+# ------------------------------
+initial_capital = 100000
 
-plt.scatter(
-    data.index[data['Prediction'] == 1],
-    data['Close'][data['Prediction'] == 1],
-    marker='^',
-    color='green',
-    label='Buy'
-)
-
-plt.scatter(
-    data.index[data['Prediction'] == 0],
-    data['Close'][data['Prediction'] == 0],
-    marker='v',
-    color='red',
-    label='Sell'
-)
-
-plt.title(f"{stock_symbol} Stock Buy/Sell Prediction")
-plt.xlabel("Date")
-plt.ylabel("Price")
-plt.legend()
-plt.show()
+data['Market_Return'] = data['Close'].pct_change()
 
